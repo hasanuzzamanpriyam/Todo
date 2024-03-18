@@ -13,84 +13,83 @@ type Todo struct {
 	ID   int
 }
 
+var (
+	todos []Todo
+)
+
 func main() {
 	// Read existing todo list from a file (optional)
-	todos := readTodosFromFile("todos.txt")
+	readTodosFromFile("todos.txt")
 
 	// User interaction loop
 	for {
 		// Display current todo list
-		displayTodos(todos)
+		displayTodos()
 
 		// Get user input
 		action, text := getUserInput()
 
 		switch action {
 		case "add":
-			todos = append(todos, Todo{Text: text, Done: false, ID: len(todos) + 1})
+			addTodo(text)
 		case "done":
-			id, err := getTodoID(text, todos)
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			todos[id-1].Done = true
+			completeTodoByText(text)
 		case "delete":
-			id, err := getTodoID(text, todos)
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			todos = removeTodo(id, todos)
+			deleteTodoByText(text)
 		case "quit":
-			writeTodosToFile("todos.txt", todos)
+			writeTodosToFile("todos.txt")
 			return
 		default:
 			fmt.Println("Invalid command. Please use 'add', 'done', 'delete', or 'quit'.")
 		}
 
 		// Save updated todo list to file (optional)
-		writeTodosToFile("todos.txt", todos)
+		writeTodosToFile("todos.txt")
 	}
 }
 
 // Read todos item from text file
-func readTodosFromFile(filename string) []Todo {
-	todos := []Todo{}
+func readTodosFromFile(filename string) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return todos // Empty list will be returned
+		fmt.Println("Error reading file:", err)
+		return
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		parts := strings.Split(line, "|")
 		if len(parts) != 3 {
-			continue // Ekip invalid line
+			continue // Skip invalid lines
 		}
 		id, _ := strconv.Atoi(parts[0])
 		done, _ := strconv.ParseBool(parts[1])
 		todos = append(todos, Todo{Text: parts[2], Done: done, ID: id})
 	}
-	return todos
 }
 
 // Writes todo item to text file
-func writeTodosToFile(filename string, todos []Todo) {
-	data := ""
+func writeTodosToFile(filename string) {
+	file, err := os.Create(filename)
+	if err != nil {
+		fmt.Println("Error creating file:", err)
+		return
+	}
+	defer file.Close()
+
 	for _, todo := range todos {
 		doneStr := "false"
 		if todo.Done {
 			doneStr = "true"
 		}
-		data += fmt.Sprintf("%d|%s|%s\n", todo.ID, doneStr, todo.Text)
-	}
-	err := os.WriteFile(filename, []byte(data), 0644)
-	if err != nil {
-		fmt.Println("Error writing to file:", err)
+		_, err := fmt.Fprintf(file, "%d|%s|%s\n", todo.ID, doneStr, todo.Text)
+		if err != nil {
+			fmt.Println("Error writing to file:", err)
+			return
+		}
 	}
 }
 
 // Display todo item in a formatted way
-func displayTodos(todos []Todo) {
+func displayTodos() {
 	fmt.Println("********** TODO LIST **********")
 	for _, todo := range todos {
 		doneStr := "[ ]"
@@ -106,25 +105,47 @@ func getUserInput() (string, string) {
 	var action, text string
 	fmt.Println("Enter action (add, done, delete, quit): ")
 	fmt.Scanln(&action)
-	if action == "add" || action == "delete" {
+	if action != "quit" {
 		fmt.Println("Enter todo text: ")
 		fmt.Scanln(&text)
-
 	}
 	return action, text
 }
 
-// Find ID of a todo item
-func getTodoID(text string, todos []Todo) (int, error) {
-	for i, todo := range todos {
-		if todo.Text == text {
-			return i + 1, nil
-		}
-	}
-	return 0, fmt.Errorf("Todo item '%s' not found", text)
+// Add a new todo item
+func addTodo(text string) {
+	todos = append(todos, Todo{Text: text, Done: false, ID: generateID()})
 }
 
-// Remove a todo item
-func removeTodo(id int, todos []Todo) []Todo {
-	return append(todos[:id-1], todos[id:]...)
+// Complete a todo item by text
+func completeTodoByText(text string) {
+	for i, todo := range todos {
+		if todo.Text == text {
+			todos[i].Done = true
+			return
+		}
+	}
+	fmt.Printf("Todo item '%s' not found\n", text)
+}
+
+// Delete a todo item by text
+func deleteTodoByText(text string) {
+	for i, todo := range todos {
+		if todo.Text == text {
+			todos = append(todos[:i], todos[i+1:]...)
+			return
+		}
+	}
+	fmt.Printf("Todo item '%s' not found\n", text)
+}
+
+// Generate a unique ID for a new todo item
+func generateID() int {
+	maxID := 0
+	for _, todo := range todos {
+		if todo.ID > maxID {
+			maxID = todo.ID
+		}
+	}
+	return maxID + 1
 }
